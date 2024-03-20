@@ -17,6 +17,7 @@ import matplotlib.pyplot as plt
 from qcore import geo
 
 
+
 R_EARTH = 6378.139
 
 
@@ -189,6 +190,7 @@ def generate_folium_map(faults_to_include, location, radius, magnitude_range, ra
         sol4 = sol3 # include all
         rr = sol4.rupture_rates
         rupt_ids_to_include = rr["Rupture Index"].unique()
+        print(sol3) 
 
     print(rupt_ids_to_include)
     print(sol4.ruptures_with_rupture_rates)
@@ -221,6 +223,8 @@ def generate_folium_map(faults_to_include, location, radius, magnitude_range, ra
 
 
 def main():
+    # Display the map
+    st.set_page_config(layout="wide")
     st.title("Rupture Explorer")
 
     # Input widgets
