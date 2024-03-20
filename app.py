@@ -117,7 +117,7 @@ def get_fault_planes(traces, dbottom, dtop, dip, dip_dir):
     return planes
 
 
-def draw_fault(faults_df, cfm_grid_fg, color=None):
+def draw_rupture(faults_df, layer, color=None):
 
     if color is None:
         
@@ -156,22 +156,17 @@ def draw_fault(faults_df, cfm_grid_fg, color=None):
                        highlight_function=lambda feature: 
                        {"fillcolor": "yellow", "color":"green"}, 
                        name=f['ParentName'],
-                       tooltip=f"{f['FaultName']} ({int(f.FaultID)}: {f['Annual Rate']:.2e}) ").add_to(cfm_grid_fg) #,
+                       tooltip=f"{f['FaultName']} ({int(f.FaultID)}: {f['Annual Rate']:.2e}) ").add_to(layer) #,
 
 
         if color is None:
-            folium.GeoJson(fault_lines,style_function=lambda x, i=i: {"color": line_colors[i], "weight":3}).add_to(cfm_grid_fg)
+            folium.GeoJson(fault_lines,style_function=lambda x, i=i: {"color": line_colors[i], "weight":3}).add_to(layer)
         else:
-            folium.GeoJson(fault_lines,style_function=lambda x: {"color": color, "weight":3}).add_to(cfm_grid_fg)
+            folium.GeoJson(fault_lines,style_function=lambda x: {"color": color, "weight":3}).add_to(layer)
     
-    return cfm_grid_fg
+    return layer
 
-
-
-def generate_folium_map(faults_to_include, location, radius, magnitude_range, rate_range):
-
-
-
+def get_ruptures(faults_to_include, location, radius, magnitude_range, rate_range):
     rupt_ids = rupt_ids_within_rate_range(sol, rate_range[0], rate_range[1])
     print(rupt_ids)
     sol2 = InversionSolution().filter_solution(sol, rupt_ids)
@@ -195,27 +190,35 @@ def generate_folium_map(faults_to_include, location, radius, magnitude_range, ra
     print(rupt_ids_to_include)
     print(sol4.ruptures_with_rupture_rates)
 
+    return sol4, rupt_ids_to_include
 
-    # Your logic to query the database and generate the folium map goes here
-    # For demonstration purposes, let's create a simple map with markers
-#    figure = folium.Figure(width=1500, height=1500)
-    grid_map = folium.Map(location=[-42.1, 172.8], zoom_start=7, tiles='cartodbpositron')  # Centered around New Zealand
-#    grid_map.add_to(figure)
-    cfm_grid_fg = folium.FeatureGroup(name="CFMv1.0", overlay=True)
+def generate_folium_map(faults_to_include, location, radius, magnitude_range, rate_range):
 
-    all_faults_df = section_participation(sol4,rupt_ids_to_include) 
 
-    draw_fault(all_faults_df, cfm_grid_fg)
 
-    rup_i = 6
-    faults_df=section_participation(sol4, [rupt_ids_to_include[rup_i]])
-    draw_fault(faults_df, cfm_grid_fg, "red")
+    sol, rupt_ids_to_include = get_ruptures(faults_to_include, location, radius, magnitude_range, rate_range)
+
+
+    grid_map = folium.Map(location=[-42.1, 172.8], zoom_start=6, tiles='cartodbpositron')  # Centered around New Zealand
+    all_ruptures_fg = folium.FeatureGroup(name="All ruptures", overlay=False,control=False,show=True)
+
+    all_ruptures_df = section_participation(sol,rupt_ids_to_include) 
+
+    draw_rupture(all_ruptures_df, all_ruptures_fg)
+
+    all_ruptures_fg.add_to(grid_map)
+
+    ruptures_fg = []
+    for i in range(len(rupt_ids_to_include)):
+        rupture_df=section_participation(sol, [rupt_ids_to_include[i]])
+        fg=folium.FeatureGroup(name=f"Scenario {i}", overlay=True, show=(i==0))
+        draw_rupture(rupture_df, fg, "red")
+        fg.add_to(grid_map)
 
 
     folium.Circle(location=(cities[location][0],cities[location][1]),radius=radius).add_to(grid_map) # add circle
     folium.LatLngPopup().add_to(grid_map)
-    cfm_grid_fg.add_to(grid_map)
-    folium.LayerControl(collapsed=True).add_to(grid_map)
+    folium.LayerControl(collapsed=False,draggable=True).add_to(grid_map)
 
     return grid_map
 
