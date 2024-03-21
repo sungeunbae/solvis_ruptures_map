@@ -192,35 +192,30 @@ def get_ruptures(faults_to_include, location, radius, magnitude_range, rate_rang
 
     return sol4, rupt_ids_to_include
 
-def generate_folium_map(faults_to_include, location, radius, magnitude_range, rate_range):
+def generate_folium_map(faults_to_include, location, radius, magnitude_range, rate_range, fmap=None, sol=None, rupt_ids=None, rupt_id=0):
 
+    if sol is None:
+        sol, rupt_ids = get_ruptures(faults_to_include, location, radius, magnitude_range, rate_range)
 
-
-    sol, rupt_ids_to_include = get_ruptures(faults_to_include, location, radius, magnitude_range, rate_range)
-
-
-    grid_map = folium.Map(location=[-42.1, 172.8], zoom_start=6, tiles='cartodbpositron')  # Centered around New Zealand
-    all_ruptures_fg = folium.FeatureGroup(name="All ruptures", overlay=False,control=False,show=True)
-
-    all_ruptures_df = section_participation(sol,rupt_ids_to_include) 
-
-    draw_rupture(all_ruptures_df, all_ruptures_fg)
-
-    all_ruptures_fg.add_to(grid_map)
+    if fmap is None:
+        fmap = folium.Map(location=[-42.1, 172.8], zoom_start=6, tiles='cartodbpositron')  # Centered around New Zealand
+        all_ruptures_fg = folium.FeatureGroup(name="All ruptures", overlay=False,control=False,show=True)
+        all_ruptures_df = section_participation(sol,rupt_ids) 
+        draw_rupture(all_ruptures_df, all_ruptures_fg)
+        all_ruptures_fg.add_to(fmap)
 
     ruptures_fg = []
-    for i in range(len(rupt_ids_to_include)):
-        rupture_df=section_participation(sol, [rupt_ids_to_include[i]])
-        fg=folium.FeatureGroup(name=f"Scenario {i}", overlay=True, show=(i==0))
-        draw_rupture(rupture_df, fg, "red")
-        fg.add_to(grid_map)
+    rupture_df=section_participation(sol, [rupt_ids[rupt_id]])
+    fg=folium.FeatureGroup(name=f"Scenario {rupt_id}", overlay=True)
+    draw_rupture(rupture_df, fg, "red")
+    fg.add_to(fmap)
 
 
-    folium.Circle(location=(cities[location][0],cities[location][1]),radius=radius).add_to(grid_map) # add circle
-    folium.LatLngPopup().add_to(grid_map)
-    folium.LayerControl(collapsed=False,draggable=True).add_to(grid_map)
+    folium.Circle(location=(cities[location][0],cities[location][1]),radius=radius).add_to(fmap) # add circle
+    folium.LatLngPopup().add_to(fmap)
+    folium.LayerControl(collapsed=False,draggable=True).add_to(fmap)
 
-    return grid_map
+    return fmap, sol, rupt_ids
 
 
 
@@ -230,12 +225,35 @@ def main():
     st.set_page_config(layout="wide")
     st.title("Rupture Explorer")
 
+    radius_enabled = False
+    scenario_enabled = False
+    print(st.session_state)
+
+    if "max_scenario" not in st.session_state:
+        min_scenario = 0
+        max_scenario = 1
+    else:
+        min_scenario = 1
+        max_scenario = st.session_state.max_scenario
+        scenario_enabled = True
+
+
     # Input widgets
     faults_to_include = st.sidebar.multiselect("Faults (optional)", fault_names, placeholder="Faults (optional)",default=None)
-    location = st.sidebar.selectbox("Locations", sorted(cities.keys()))
-    radius = st.sidebar.selectbox("Radius (km)", (10,20,30,40,50,100,200))
+    location = st.sidebar.selectbox("Locations", sorted(cities.keys()),index=None)
+
+    if location:
+        radius_enabled = True
+
+    radius = st.sidebar.selectbox("Radius (km)", (10,20,30,40,50,100,200), disabled=not radius_enabled)
     magnitude_range = st.sidebar.slider("Magnitude", 6,10, (6,10))
     rate_range = st.sidebar.slider("Rate (1eN/yr)", -20, 0, (-20,0))
+
+    scenario = st.sidebar.slider("Scenarios",min_value=min_scenario,max_value=max_scenario,key="num_scenarios", disabled=not scenario_enabled)
+    if scenario == 0:
+        scenario = 1
+
+    # Initialize scenario 
 
     print(faults_to_include)
     print(location)
@@ -247,12 +265,22 @@ def main():
     if st.sidebar.button("Generate Map"):
         try:
             # Convert locations input to a list of tuples (latitude, longitude, city name)
-            fmap = generate_folium_map(faults_to_include, location, radius*1000, magnitude_range, (10**rate_range[0],10**rate_range[1]))
+
+
+            fmap,sol,rupt_ids = generate_folium_map(faults_to_include, location, radius*1000, magnitude_range, (10**rate_range[0],10**rate_range[1]),rupt_id=scenario-1)
+
+
             #fmap = folium.Map(location=[39.949610, -75.150282], zoom_start=16)
     #        st_data = st_folium(fmap, width=1500, height=1500)
+            if len(rupt_ids)>0:
+                st.session_state.max_scenario = len(rupt_ids)
+
             folium_static(fmap, width=1000, height=1200)
+
+            #do something to refresh
         except Exception as e:
             st.error(f"Error: {e}")
 
+    st.sidebar.write("Selected scenario:", scenario)
 if __name__ == "__main__":
     main()
