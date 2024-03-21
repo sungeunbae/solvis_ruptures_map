@@ -192,21 +192,17 @@ def get_ruptures(faults_to_include, location, radius, magnitude_range, rate_rang
 
     return sol4, rupt_ids_to_include
 
-def generate_folium_map(faults_to_include, location, radius, magnitude_range, rate_range, fmap=None, sol=None, rupt_ids=None, rupt_id=0):
+def generate_folium_map(sol, rupt_ids, location, radius, fmap=None,rupt_id=0):
 
-    if sol is None:
-        sol, rupt_ids = get_ruptures(faults_to_include, location, radius, magnitude_range, rate_range)
 
-    if fmap is None:
-        fmap = folium.Map(location=[-42.1, 172.8], zoom_start=6, tiles='cartodbpositron')  # Centered around New Zealand
-        all_ruptures_fg = folium.FeatureGroup(name="All ruptures", overlay=False,control=False,show=True)
-        all_ruptures_df = section_participation(sol,rupt_ids) 
-        draw_rupture(all_ruptures_df, all_ruptures_fg)
-        all_ruptures_fg.add_to(fmap)
+    all_ruptures_fg = folium.FeatureGroup(name="All ruptures", overlay=False,control=False,show=True)
+    all_ruptures_df = section_participation(sol,rupt_ids) 
+    draw_rupture(all_ruptures_df, all_ruptures_fg)
+    all_ruptures_fg.add_to(fmap)
 
     ruptures_fg = []
     rupture_df=section_participation(sol, [rupt_ids[rupt_id]])
-    fg=folium.FeatureGroup(name=f"Scenario {rupt_id}", overlay=True)
+    fg=folium.FeatureGroup(name=f"Scenario {rupt_id+1}", overlay=True)
     draw_rupture(rupture_df, fg, "red")
     fg.add_to(fmap)
 
@@ -215,7 +211,7 @@ def generate_folium_map(faults_to_include, location, radius, magnitude_range, ra
     folium.LatLngPopup().add_to(fmap)
     folium.LayerControl(collapsed=False,draggable=True).add_to(fmap)
 
-    return fmap, sol, rupt_ids
+    return fmap
 
 
 
@@ -238,6 +234,7 @@ def main():
         scenario_enabled = True
 
 
+    fmap = folium.Map(location=[-42.1, 172.8], zoom_start=6, tiles='cartodbpositron')  # Centered around New Zealand
     # Input widgets
     faults_to_include = st.sidebar.multiselect("Faults (optional)", fault_names, placeholder="Faults (optional)",default=None)
     location = st.sidebar.selectbox("Locations", sorted(cities.keys()),index=None)
@@ -249,9 +246,11 @@ def main():
     magnitude_range = st.sidebar.slider("Magnitude", 6,10, (6,10))
     rate_range = st.sidebar.slider("Rate (1eN/yr)", -20, 0, (-20,0))
 
-    scenario = st.sidebar.slider("Scenarios",min_value=min_scenario,max_value=max_scenario,key="num_scenarios", disabled=not scenario_enabled)
-    if scenario == 0:
-        scenario = 1
+
+    scenario_val = st.slider("Scenarios",min_value=min_scenario,max_value=max_scenario,key="scenario", disabled=not scenario_enabled)
+    if scenario_val == 0:
+        scenario_val = 1
+
 
     # Initialize scenario 
 
@@ -261,13 +260,18 @@ def main():
     print(magnitude_range)
     print(rate_range)
 
+    def update_scenario():
+        st.session_state["scenario"]=scenario_val
+        return
+
     # Process user input
-    if st.sidebar.button("Generate Map"):
+    if st.sidebar.button("Generate Map", on_click=update_scenario):
         try:
             # Convert locations input to a list of tuples (latitude, longitude, city name)
+        
 
-
-            fmap,sol,rupt_ids = generate_folium_map(faults_to_include, location, radius*1000, magnitude_range, (10**rate_range[0],10**rate_range[1]),rupt_id=scenario-1)
+            sol, rupt_ids = get_ruptures(faults_to_include, location, radius*1000, magnitude_range, (10**rate_range[0],10**rate_range[1]))
+            fmap = generate_folium_map(sol, rupt_ids, location, radius*1000, fmap=fmap, rupt_id=scenario_val-1)
 
 
             #fmap = folium.Map(location=[39.949610, -75.150282], zoom_start=16)
@@ -275,12 +279,13 @@ def main():
             if len(rupt_ids)>0:
                 st.session_state.max_scenario = len(rupt_ids)
 
-            folium_static(fmap, width=1000, height=1200)
 
             #do something to refresh
         except Exception as e:
-            st.error(f"Error: {e}")
+    #        st.error(f"Error: {e}")
+            raise e
 
-    st.sidebar.write("Selected scenario:", scenario)
+    folium_static(fmap, width=1200, height=1200)
+    st.sidebar.write("Selected scenario:", scenario_val)
 if __name__ == "__main__":
     main()
