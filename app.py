@@ -284,8 +284,17 @@ def main():
         except Exception as e:
     #        st.error(f"Error: {e}")
             raise e
+        else:
+            rr=sol.ruptures_with_rupture_rates
+            rupt_id = rupt_ids[scenario_val-1]
+            rupture = rr[rr["Rupture Index"]==rupt_id]
+
+            st.sidebar.write(f"Rupure {scenario_val} of {len(rupt_ids)}")
+            st.sidebar.write(f"Mean Rate: {rupture['Annual Rate'].values[0]:.2e} per year")
+            st.sidebar.write(f"Magnitude: {rupture['Magnitude'].values[0]}")
+            st.sidebar.write(f"Area: {rupture['Area (m^2)'].values[0]/1e6} km2")
+            st.sidebar.write(f"Length: {rupture['Length (m)'].values[0]/1e3} m")
 
     folium_static(fmap, width=1200, height=1200)
-    st.sidebar.write("Selected scenario:", scenario_val)
 if __name__ == "__main__":
     main()
