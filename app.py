@@ -13,6 +13,9 @@ from matplotlib.cm import ScalarMappable
 import numpy as np
 from matplotlib import colors
 import matplotlib.pyplot as plt
+import plotly.express as px
+import plotly.graph_objects as go
+
 
 from qcore import geo
 
@@ -36,8 +39,8 @@ norm = BoundaryNorm(boundaries, cmap.N, clip=True)
 WORK_DIR = Path("NSHM_data")
 cru_archive = WORK_DIR / "CRU_fault_system_solution.zip"
 
-sol = InversionSolution.from_archive(cru_archive)
-fault_names = sol.fault_sections.ParentName.unique().tolist()
+all_sol = InversionSolution.from_archive(cru_archive)
+fault_names = all_sol.fault_sections.ParentName.unique().tolist()
 
 
 cities={'Wellington': (-41.276825, 174.777969),
@@ -167,11 +170,14 @@ def draw_rupture(faults_df, layer, color=None):
     return layer
 
 def get_ruptures(faults_to_include, location, radius, magnitude_range, rate_range):
-    rupt_ids = rupt_ids_within_rate_range(sol, rate_range[0], rate_range[1])
+    rupt_ids = rupt_ids_within_rate_range(all_sol, rate_range[0], rate_range[1])
     print(rupt_ids)
-    sol2 = InversionSolution().filter_solution(sol, rupt_ids)
-    rupt_ids = within_radius_rupt_ids(sol2, location, radius) # radius is in meters. 100km->100e3
-    sol3 = InversionSolution().filter_solution(sol2, rupt_ids)
+    sol2 = InversionSolution().filter_solution(all_sol, rupt_ids)
+    if location is not None:
+        rupt_ids = within_radius_rupt_ids(sol2, location, radius) # radius is in meters. 100km->100e3
+        sol3 = InversionSolution().filter_solution(sol2, rupt_ids)
+    else:
+        sol3 = sol2
 
     if len(faults_to_include) > 0:
         rupt_ids_to_include = []
@@ -206,13 +212,45 @@ def generate_folium_map(sol, rupt_ids, location, radius, fmap=None,rupt_id=0):
     draw_rupture(rupture_df, fg, "red")
     fg.add_to(fmap)
 
-
-    folium.Circle(location=(cities[location][0],cities[location][1]),radius=radius).add_to(fmap) # add circle
+    if location is not None:
+        folium.Circle(location=(cities[location][0],cities[location][1]),radius=radius).add_to(fmap) # add circle
     folium.LatLngPopup().add_to(fmap)
     folium.LayerControl(collapsed=False,draggable=True).add_to(fmap)
 
     return fmap
 
+def plot_scatter(all_ruptures_df, filtered_df):
+   
+    # Create the scatter plot
+    fig = go.Figure()
+
+    # Add all ruptures data points (green markers)
+    fig.add_trace(go.Scatter(x=all_ruptures_df["Magnitude"], y=all_ruptures_df["Annual Rate"],
+                             mode='markers', name=f"All Ruptures ({len(all_ruptures_df)})",
+                             marker=dict(color='green', size=10, opacity=0.5)))
+
+    # Add filtered data points (red markers)
+    fig.add_trace(go.Scatter(x=filtered_df["Magnitude"], y=filtered_df["Annual Rate"],
+                             mode='markers', name=f"Filtered Ruptures ({len(filtered_df)})",
+                             marker=dict(color='red', size=10, opacity=1)))
+
+    # Add ellipse shape
+    fig.add_shape(type="circle",
+                  xref="x", yref="y",
+                    x0=min(filtered_df["Magnitude"]), y0=min(filtered_df["Annual Rate"]),
+                    x1=max(filtered_df["Magnitude"]), y1=max(filtered_df["Annual Rate"]),
+                    opacity=0.9,
+                  line=dict(color="red"))
+
+    # Set y-axis to be logarithmic
+    fig.update_yaxes(title_text="Annual Rate", type="log")
+    fig.update_xaxes(title_text="Magnitude")
+    
+    fig.update_layout(width=1200, height=800)
+
+    # Show the interactive plot
+    #fig.show()
+    return fig
 
 
 
@@ -266,6 +304,14 @@ def main():
         st.session_state.max_scenario = len(rupt_ids)
         st.session_state.sol=sol
         st.session_state.rupt_ids=rupt_ids
+
+        
+        fig = plot_scatter(all_sol.ruptures_with_rupture_rates, sol.ruptures_with_rupture_rates)
+
+        st.plotly_chart(fig)
+        all_sol.ruptures_with_rupture_rates.to_csv("all_ruptures.csv")
+        sol.ruptures_with_rupture_rates.to_csv("AF_ruptures.csv")
+
         
 
 #    def call_generate_fmap():
@@ -273,6 +319,7 @@ def main():
 
  
     st.sidebar.button("Get ruptures", on_click=call_get_ruptures)
+
 
     if  st.button("Generate Map", key="generate_map",disabled = not scenario_enabled):
         try:
