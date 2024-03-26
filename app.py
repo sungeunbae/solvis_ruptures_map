@@ -207,6 +207,7 @@ def generate_folium_map(sol, rupt_ids, location, radius, fmap=None,rupt_id=0):
     all_ruptures_fg.add_to(fmap)
 
     ruptures_fg = []
+
     rupture_df=section_participation(sol, [rupt_ids[rupt_id]])
     fg=folium.FeatureGroup(name=f"Scenario {rupt_id+1}", overlay=True)
     draw_rupture(rupture_df, fg, "red")
@@ -237,7 +238,7 @@ def plot_scatter(all_ruptures_df, filtered_df=None):
                              mode='markers', name=f"All Ruptures ({len(all_ruptures_df)})",
                              marker=dict(color='green', size=10, opacity=0.7)))
 
-    if filtered_df is not None:
+    if filtered_df is not None and len(filtered_df)>0:
     # Add filtered data points (red markers)
         fig.add_trace(go.Scatter(x=filtered_df["Magnitude"], y=filtered_df["Annual Rate"],
                                  mode='markers', name=f"Selected Ruptures ({len(filtered_df)})",
@@ -304,7 +305,7 @@ def main():
     fig = plot_scatter(all_ruptures, selected_ruptures)
     st.plotly_chart(fig)
     st.download_button(label="all_ruptures.csv",data=convert_df(all_ruptures), file_name='all_ruptures.csv', mime='text/csv')
-    st.download_button(label="selected_ruptures.csv",data=convert_df(selected_ruptures), file_name='selected_ruptures.csv', mime='text/csv',disabled=(selected_ruptures is None))
+    st.download_button(label="selected_ruptures.csv",data=convert_df(selected_ruptures), file_name='selected_ruptures.csv', mime='text/csv',disabled=(selected_ruptures is None or len(selected_ruptures)==0))
 
 
     scenario_val = st.slider("Scenarios",min_value=min_scenario,max_value=max_scenario,key="scenario", disabled=not scenario_enabled)
@@ -339,7 +340,7 @@ def main():
     st.sidebar.button("Get ruptures", on_click=call_get_ruptures)
 
     
-    if  st.button("Generate Map", key="generate_map",disabled = not scenario_enabled):
+    if  st.button("Generate Map", key="generate_map",disabled = (not scenario_enabled or len(st.session_state.rupt_ids)==0)):
         try:
             st.session_state.fmap = generate_folium_map(st.session_state.sol, st.session_state.rupt_ids, location, radius*1000, fmap=st.session_state.fmap, rupt_id=scenario_val-1)
         except Exception as e:
