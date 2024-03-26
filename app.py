@@ -219,7 +219,15 @@ def generate_folium_map(sol, rupt_ids, location, radius, fmap=None,rupt_id=0):
 
     return fmap
 
-def plot_scatter(all_ruptures_df, filtered_df):
+@st.cache_data
+def convert_df(df):
+    if df is not None:
+        return df.to_csv().encode('utf-8')
+    else:
+        return ""
+
+
+def plot_scatter(all_ruptures_df, filtered_df=None):
    
     # Create the scatter plot
     fig = go.Figure()
@@ -227,20 +235,21 @@ def plot_scatter(all_ruptures_df, filtered_df):
     # Add all ruptures data points (green markers)
     fig.add_trace(go.Scatter(x=all_ruptures_df["Magnitude"], y=all_ruptures_df["Annual Rate"],
                              mode='markers', name=f"All Ruptures ({len(all_ruptures_df)})",
-                             marker=dict(color='green', size=10, opacity=0.5)))
+                             marker=dict(color='green', size=10, opacity=0.7)))
 
+    if filtered_df is not None:
     # Add filtered data points (red markers)
-    fig.add_trace(go.Scatter(x=filtered_df["Magnitude"], y=filtered_df["Annual Rate"],
-                             mode='markers', name=f"Filtered Ruptures ({len(filtered_df)})",
-                             marker=dict(color='red', size=10, opacity=1)))
+        fig.add_trace(go.Scatter(x=filtered_df["Magnitude"], y=filtered_df["Annual Rate"],
+                                 mode='markers', name=f"Selected Ruptures ({len(filtered_df)})",
+                                 marker=dict(color='red', size=8, opacity=0.5)))
 
-    # Add ellipse shape
-    fig.add_shape(type="circle",
-                  xref="x", yref="y",
-                    x0=min(filtered_df["Magnitude"]), y0=min(filtered_df["Annual Rate"]),
-                    x1=max(filtered_df["Magnitude"]), y1=max(filtered_df["Annual Rate"]),
-                    opacity=0.9,
-                  line=dict(color="red"))
+        # Add ellipse shape
+        fig.add_shape(type="circle",
+                      xref="x", yref="y",
+                        x0=min(filtered_df["Magnitude"]), y0=min(filtered_df["Annual Rate"]),
+                        x1=max(filtered_df["Magnitude"]), y1=max(filtered_df["Annual Rate"]),
+                        opacity=0.9,
+                      line=dict(color="red"))
 
     # Set y-axis to be logarithmic
     fig.update_yaxes(title_text="Annual Rate", type="log")
@@ -255,8 +264,6 @@ def plot_scatter(all_ruptures_df, filtered_df):
 
 
 def main():
-
-
 
     # Display the map
     st.set_page_config(layout="wide")
@@ -287,6 +294,18 @@ def main():
     magnitude_range = st.sidebar.slider("Magnitude", 6,10, (6,10))
     rate_range = st.sidebar.slider("Rate (1eN/yr)", -20, 0, (-20,0))
 
+    all_ruptures = all_sol.ruptures_with_rupture_rates
+    if "sol" in st.session_state:
+        
+        selected_ruptures = st.session_state.sol.ruptures_with_rupture_rates
+    else:
+        selected_ruptures = None
+
+    fig = plot_scatter(all_ruptures, selected_ruptures)
+    st.plotly_chart(fig)
+    st.download_button(label="all_ruptures.csv",data=convert_df(all_ruptures), file_name='all_ruptures.csv', mime='text/csv')
+    st.download_button(label="selected_ruptures.csv",data=convert_df(selected_ruptures), file_name='selected_ruptures.csv', mime='text/csv',disabled=(selected_ruptures is None))
+
 
     scenario_val = st.slider("Scenarios",min_value=min_scenario,max_value=max_scenario,key="scenario", disabled=not scenario_enabled)
     if scenario_val == 0:
@@ -306,21 +325,20 @@ def main():
         st.session_state.rupt_ids=rupt_ids
 
         
-        fig = plot_scatter(all_sol.ruptures_with_rupture_rates, sol.ruptures_with_rupture_rates)
+    #    fig = plot_scatter(all_sol.ruptures_with_rupture_rates, sol.ruptures_with_rupture_rates)
 
-        st.plotly_chart(fig)
-        all_sol.ruptures_with_rupture_rates.to_csv("all_ruptures.csv")
-        sol.ruptures_with_rupture_rates.to_csv("AF_ruptures.csv")
+    #    st.plotly_chart(fig)
+#        all_sol.ruptures_with_rupture_rates.to_csv("all_ruptures.csv")
+#        sol.ruptures_with_rupture_rates.to_csv("AF_ruptures.csv")
 
         
 
 #    def call_generate_fmap():
 #        st.session_state.fmap = generate_folium_map(st.session_state.sol, st.session_state.rupt_ids, location, radius*1000, fmap=st.session_state.fmap, rupt_id=scenario_val-1)  
 
- 
     st.sidebar.button("Get ruptures", on_click=call_get_ruptures)
 
-
+    
     if  st.button("Generate Map", key="generate_map",disabled = not scenario_enabled):
         try:
             st.session_state.fmap = generate_folium_map(st.session_state.sol, st.session_state.rupt_ids, location, radius*1000, fmap=st.session_state.fmap, rupt_id=scenario_val-1)
