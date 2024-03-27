@@ -169,6 +169,7 @@ def draw_rupture(faults_df, layer, color=None):
     
     return layer
 
+@st.cache_data
 def get_ruptures(faults_to_include, location, radius, magnitude_range, rate_range):
     rupt_ids_rate = rupt_ids_within_range(all_sol, rate_range[0], rate_range[1], "Annual Rate")
     rupt_ids_mag = rupt_ids_within_range(all_sol, magnitude_range[0], magnitude_range[1], "Magnitude")
@@ -248,7 +249,7 @@ def plot_scatter(all_ruptures_df, filtered_df=None):
                       line=dict(color="red"))
 
     # Set y-axis to be logarithmic
-    fig.update_yaxes(title_text="Annual Rate", type="log")
+    fig.update_yaxes(title_text="Annual Rate", type="log", tickformat=".1e")
     fig.update_xaxes(title_text="Magnitude")
     
     fig.update_layout(width=1200, height=800)
