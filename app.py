@@ -307,8 +307,7 @@ def main():
     st.download_button(label="all_ruptures.csv",data=convert_df(all_ruptures), file_name='all_ruptures.csv', mime='text/csv')
     st.download_button(label="selected_ruptures.csv",data=convert_df(selected_ruptures), file_name='selected_ruptures.csv', mime='text/csv',disabled=(selected_ruptures is None or len(selected_ruptures)==0))
 
-
-    scenario_val = st.slider("Scenarios",min_value=min_scenario,max_value=max_scenario,key="scenario", disabled=not scenario_enabled)
+    scenario_val = st.number_input(f"Scenarios ({min_scenario}-{max_scenario})",min_value=min_scenario,max_value=max_scenario,key="scenario", disabled=not scenario_enabled)
     if scenario_val == 0:
         scenario_val = 1
 
@@ -324,7 +323,6 @@ def main():
         st.session_state.max_scenario = len(rupt_ids)
         st.session_state.sol=sol
         st.session_state.rupt_ids=rupt_ids
-
         
     #    fig = plot_scatter(all_sol.ruptures_with_rupture_rates, sol.ruptures_with_rupture_rates)
 
@@ -339,8 +337,8 @@ def main():
 
     st.sidebar.button("Get ruptures", on_click=call_get_ruptures)
 
+    if scenario_enabled and len(st.session_state.rupt_ids) > 0:
     
-    if  st.button("Generate Map", key="generate_map",disabled = (not scenario_enabled or len(st.session_state.rupt_ids)==0)):
         try:
             st.session_state.fmap = generate_folium_map(st.session_state.sol, st.session_state.rupt_ids, location, radius*1000, fmap=st.session_state.fmap, rupt_id=scenario_val-1)
         except Exception as e:
