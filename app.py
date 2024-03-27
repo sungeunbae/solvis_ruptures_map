@@ -78,8 +78,8 @@ def within_radius_rupt_ids(sol, cityname, radius):
 
     return rupts
 
-def rupt_ids_within_rate_range(sol: InversionSolutionProtocol, lower: float, upper: float, rate_column: str = "Annual Rate"):
-    rr = sol.rupture_rates
+def rupt_ids_within_range(sol: InversionSolutionProtocol, lower: float, upper: float, rate_column: str = "Annual Rate"):
+    rr = sol.ruptures_with_rupture_rates
     return rr[(rr[rate_column] >= lower) & (rr[rate_column] < upper) ]["Rupture Index"].unique()
 
 
@@ -170,33 +170,28 @@ def draw_rupture(faults_df, layer, color=None):
     return layer
 
 def get_ruptures(faults_to_include, location, radius, magnitude_range, rate_range):
-    rupt_ids = rupt_ids_within_rate_range(all_sol, rate_range[0], rate_range[1])
-    print(rupt_ids)
-    sol2 = InversionSolution().filter_solution(all_sol, rupt_ids)
+    rupt_ids_rate = rupt_ids_within_range(all_sol, rate_range[0], rate_range[1], "Annual Rate")
+    rupt_ids_mag = rupt_ids_within_range(all_sol, magnitude_range[0], magnitude_range[1], "Magnitude")
+    rupt_ids_selected = np.intersect1d(rupt_ids_rate, rupt_ids_mag)
+    #print(rupt_ids_selected)
+
     if location is not None:
-        rupt_ids = within_radius_rupt_ids(sol2, location, radius) # radius is in meters. 100km->100e3
-        sol3 = InversionSolution().filter_solution(sol2, rupt_ids)
-    else:
-        sol3 = sol2
+        rupt_ids_loc = within_radius_rupt_ids(all_sol, location, radius) # radius is in meters. 100km->100e3
+        rupt_ids_selected = np.intersect1d(rupt_ids_selected, rupt_ids_loc)
 
     if len(faults_to_include) > 0:
-        rupt_ids_to_include = []
+        rupt_ids_with_faults = []
         for fault in faults_to_include:
-            rupt_ids_with_fault = sol3.get_ruptures_for_parent_fault(fault)
-            rupt_ids_to_include.extend(rupt_ids_with_fault)
-        rupt_ids_to_include=np.array(sorted(set(rupt_ids_to_include)))
+            rupt_ids_with_fault = all_sol.get_ruptures_for_parent_fault(fault)
+            rupt_ids_with_faults.extend(rupt_ids_with_fault)
+        rupt_ids_with_faults = np.array(sorted(set(rupt_ids_with_faults)))
+        rupt_ids_selected = np.intersect1d(rupt_ids_selected, rupt_ids_with_faults)
 
-        sol4 = InversionSolution().filter_solution(sol3, rupt_ids_to_include) 
-    else:
-        sol4 = sol3 # include all
-        rr = sol4.rupture_rates
-        rupt_ids_to_include = rr["Rupture Index"].unique()
-        print(sol3) 
+    print(rupt_ids_selected)
+    sol = InversionSolution().filter_solution(all_sol, rupt_ids_selected)
+    print(sol.ruptures_with_rupture_rates)
 
-    print(rupt_ids_to_include)
-    print(sol4.ruptures_with_rupture_rates)
-
-    return sol4, rupt_ids_to_include
+    return sol, rupt_ids_selected
 
 def generate_folium_map(sol, rupt_ids, location, radius, fmap=None,rupt_id=0):
 
@@ -324,17 +319,6 @@ def main():
         st.session_state.sol=sol
         st.session_state.rupt_ids=rupt_ids
         
-    #    fig = plot_scatter(all_sol.ruptures_with_rupture_rates, sol.ruptures_with_rupture_rates)
-
-    #    st.plotly_chart(fig)
-#        all_sol.ruptures_with_rupture_rates.to_csv("all_ruptures.csv")
-#        sol.ruptures_with_rupture_rates.to_csv("AF_ruptures.csv")
-
-        
-
-#    def call_generate_fmap():
-#        st.session_state.fmap = generate_folium_map(st.session_state.sol, st.session_state.rupt_ids, location, radius*1000, fmap=st.session_state.fmap, rupt_id=scenario_val-1)  
-
     st.sidebar.button("Get ruptures", on_click=call_get_ruptures)
 
     if scenario_enabled and len(st.session_state.rupt_ids) > 0:
