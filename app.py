@@ -223,7 +223,7 @@ def generate_folium_map(sol, rupt_ids, location, radius, fmap=None,rupt_id=0):
 @st.cache_data
 def convert_df(df):
     if df is not None:
-        return df.to_csv().encode('utf-8')
+        return df.to_csv(index=False).encode('utf-8')
     else:
         return ""
 
