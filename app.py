@@ -169,8 +169,16 @@ def draw_rupture(faults_df, layer, color=None):
     
     return layer
 
+def combine_lists(lists, op):
+    if op == "OR":
+        return np.array(sorted(list(set().union(*lists))))
+    elif op == "AND":
+        return np.array(sorted(list(set(lists[0]).intersection(*lists))))
+    else:
+        raise ValueError("Invalid operator, Use 'OR' or 'AND'.")
+
 @st.cache_data
-def get_ruptures(faults_to_include, location, radius, magnitude_range, rate_range):
+def get_ruptures(faults_to_include, multiple_fault_op,location, radius, magnitude_range, rate_range):
     rupt_ids_rate = rupt_ids_within_range(all_sol, rate_range[0], rate_range[1], "Annual Rate")
     rupt_ids_mag = rupt_ids_within_range(all_sol, magnitude_range[0], magnitude_range[1], "Magnitude")
     rupt_ids_selected = np.intersect1d(rupt_ids_rate, rupt_ids_mag)
@@ -181,11 +189,7 @@ def get_ruptures(faults_to_include, location, radius, magnitude_range, rate_rang
         rupt_ids_selected = np.intersect1d(rupt_ids_selected, rupt_ids_loc)
 
     if len(faults_to_include) > 0:
-        rupt_ids_with_faults = []
-        for fault in faults_to_include:
-            rupt_ids_with_fault = all_sol.get_ruptures_for_parent_fault(fault)
-            rupt_ids_with_faults.extend(rupt_ids_with_fault)
-        rupt_ids_with_faults = np.array(sorted(set(rupt_ids_with_faults)))
+        rupt_ids_with_faults = combine_lists([all_sol.get_ruptures_for_parent_fault(fault) for fault in faults_to_include],multiple_fault_op)
         rupt_ids_selected = np.intersect1d(rupt_ids_selected, rupt_ids_with_faults)
 
     print(rupt_ids_selected)
@@ -282,6 +286,9 @@ def main():
     st.session_state.fmap = folium.Map(location=[-42.1, 172.8], zoom_start=6, tiles='cartodbpositron')  # Centered around New Zealand
     # Input widgets
     faults_to_include = st.sidebar.multiselect("Faults (optional)", fault_names, placeholder="Faults (optional)",default=None)
+    multiple_fault_mix_op = st.sidebar.radio("Handling multiple fault",["OR","AND"],captions=["Union","Intersection"])
+
+
     location = st.sidebar.selectbox("Locations", sorted(cities.keys()),index=None)
 
     if location:
@@ -303,20 +310,28 @@ def main():
     st.download_button(label="all_ruptures.csv",data=convert_df(all_ruptures), file_name='all_ruptures.csv', mime='text/csv')
     st.download_button(label="selected_ruptures.csv",data=convert_df(selected_ruptures), file_name='selected_ruptures.csv', mime='text/csv',disabled=(selected_ruptures is None or len(selected_ruptures)==0))
 
+    
     scenario_val = st.number_input(f"Scenarios ({min_scenario}-{max_scenario})",min_value=min_scenario,max_value=max_scenario,key="scenario", disabled=not scenario_enabled)
+
     if scenario_val == 0:
         scenario_val = 1
 
 
     print(faults_to_include)
+    print(multiple_fault_mix_op)
     print(location)
     print(radius)
     print(magnitude_range)
     print(rate_range)
 
     def call_get_ruptures():
-        sol, rupt_ids = get_ruptures(faults_to_include, location, radius*1000, magnitude_range, (10**rate_range[0],10**rate_range[1]))
-        st.session_state.max_scenario = len(rupt_ids)
+        sol, rupt_ids = get_ruptures(faults_to_include, multiple_fault_mix_op, location, radius*1000, magnitude_range, (10**rate_range[0],10**rate_range[1]))
+        if len(rupt_ids) > 0:
+            st.session_state.max_scenario = len(rupt_ids)
+            st.session_state.min_scenario = 1
+        else:
+            st.session_state.min_scenario = 0
+            st.session_state.max_scenario = 1
         st.session_state.sol=sol
         st.session_state.rupt_ids=rupt_ids
         
@@ -338,6 +353,8 @@ def main():
             st.sidebar.write(f"Magnitude: {rupture['Magnitude'].values[0]}")
             st.sidebar.write(f"Area: {rupture['Area (m^2)'].values[0]/1e6} km2")
             st.sidebar.write(f"Length: {rupture['Length (m)'].values[0]/1e3} m")
+    else:
+        st.write("No rupture found")
 
     folium_static(st.session_state.fmap, width=1200, height=1200)
 if __name__ == "__main__":
