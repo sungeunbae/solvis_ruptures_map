@@ -327,7 +327,7 @@ def main():
 
     st.sidebar.button("Get ruptures", on_click=call_get_ruptures)
 
-    if len(st.session_state.rupt_ids) > 0:
+    if len(selected_ruptures) > 0:
     
         try:
             st.session_state.fmap = generate_folium_map(st.session_state.sol, st.session_state.rupt_ids, location, radius*1000, fmap=st.session_state.fmap, rupt_id=scenario_val-1)
@@ -344,7 +344,7 @@ def main():
             st.sidebar.write(f"Area: {rupture['Area (m^2)'].values[0]/1e6} km2")
             st.sidebar.write(f"Length: {rupture['Length (m)'].values[0]/1e3} m")
     else:
-        st.sidebar.markdown(":red[**No rupture found**]", unsafe_allow_html=True)
+        st.sidebar.markdown(":red[**No rupture selected**]", unsafe_allow_html=True)
 
     folium_static(st.session_state.fmap, width=1200, height=1200)
 if __name__ == "__main__":
