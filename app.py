@@ -1,6 +1,7 @@
 # map_app.py
 from pathlib import Path
 import geopandas as gpd
+import pandas as pd
 from solvis import InversionSolution,section_participation,rupt_ids_above_rate,circle_polygon,export_geojson
 from solvis.inversion_solution.typing import InversionSolutionProtocol
 
@@ -15,7 +16,6 @@ from matplotlib import colors
 import matplotlib.pyplot as plt
 import plotly.express as px
 import plotly.graph_objects as go
-
 
 from qcore import geo
 
@@ -206,8 +206,6 @@ def generate_folium_map(sol, rupt_ids, location, radius, fmap=None,rupt_id=0):
     draw_rupture(all_ruptures_df, all_ruptures_fg)
     all_ruptures_fg.add_to(fmap)
 
-    ruptures_fg = []
-
     rupture_df=section_participation(sol, [rupt_ids[rupt_id]])
     fg=folium.FeatureGroup(name=f"Scenario {rupt_id+1}", overlay=True)
     draw_rupture(rupture_df, fg, "red")
@@ -228,7 +226,7 @@ def convert_df(df):
         return ""
 
 
-def plot_scatter(all_ruptures_df, filtered_df=None):
+def plot_scatter(all_ruptures_df, filtered_df=[]):
    
     # Create the scatter plot
     fig = go.Figure()
@@ -238,7 +236,7 @@ def plot_scatter(all_ruptures_df, filtered_df=None):
                              mode='markers', name=f"All Ruptures ({len(all_ruptures_df)})",
                              marker=dict(color='green', size=10, opacity=0.7)))
 
-    if filtered_df is not None and len(filtered_df)>0:
+    if len(filtered_df)>0:
     # Add filtered data points (red markers)
         fig.add_trace(go.Scatter(x=filtered_df["Magnitude"], y=filtered_df["Annual Rate"],
                                  mode='markers', name=f"Selected Ruptures ({len(filtered_df)})",
@@ -271,17 +269,16 @@ def main():
     st.title("Rupture Explorer")
 
     radius_enabled = False
-    scenario_enabled = False
 
     print(st.session_state)
 
-    if "max_scenario" not in st.session_state:
+    if "max_scenario" not in st.session_state or st.session_state.max_scenario == 0:
         min_scenario = 0
         max_scenario = 1
+
     else:
         min_scenario = 1
         max_scenario = st.session_state.max_scenario
-        scenario_enabled = True
 
     st.session_state.fmap = folium.Map(location=[-42.1, 172.8], zoom_start=6, tiles='cartodbpositron')  # Centered around New Zealand
     # Input widgets
@@ -299,23 +296,20 @@ def main():
     rate_range = st.sidebar.slider("Rate (1eN/yr)", -20, 0, (-20,0))
 
     all_ruptures = all_sol.ruptures_with_rupture_rates
+
     if "sol" in st.session_state:
         
         selected_ruptures = st.session_state.sol.ruptures_with_rupture_rates
     else:
-        selected_ruptures = None
+        selected_ruptures = pd.DataFrame([])
 
     fig = plot_scatter(all_ruptures, selected_ruptures)
     st.plotly_chart(fig)
     st.download_button(label="all_ruptures.csv",data=convert_df(all_ruptures), file_name='all_ruptures.csv', mime='text/csv')
-    st.download_button(label="selected_ruptures.csv",data=convert_df(selected_ruptures), file_name='selected_ruptures.csv', mime='text/csv',disabled=(selected_ruptures is None or len(selected_ruptures)==0))
+    st.download_button(label="selected_ruptures.csv",data=convert_df(selected_ruptures), file_name='selected_ruptures.csv', mime='text/csv',disabled=(len(selected_ruptures)==0))
 
     
-    scenario_val = st.number_input(f"Scenarios ({min_scenario}-{max_scenario})",min_value=min_scenario,max_value=max_scenario,key="scenario", disabled=not scenario_enabled)
-
-    if scenario_val == 0:
-        scenario_val = 1
-
+    scenario_val = st.number_input(f"Scenarios ({min_scenario}-{max_scenario})",min_value=min_scenario,max_value=max_scenario,key="scenario", disabled=(len(selected_ruptures)==0))
 
     print(faults_to_include)
     print(multiple_fault_mix_op)
@@ -325,19 +319,15 @@ def main():
     print(rate_range)
 
     def call_get_ruptures():
-        sol, rupt_ids = get_ruptures(faults_to_include, multiple_fault_mix_op, location, radius*1000, magnitude_range, (10**rate_range[0],10**rate_range[1]))
-        if len(rupt_ids) > 0:
-            st.session_state.max_scenario = len(rupt_ids)
-            st.session_state.min_scenario = 1
-        else:
-            st.session_state.min_scenario = 0
-            st.session_state.max_scenario = 1
-        st.session_state.sol=sol
-        st.session_state.rupt_ids=rupt_ids
-        
+        sol, rupt_ids = get_ruptures(faults_to_include, multiple_fault_mix_op, location, radius * 1000, magnitude_range,
+                                     (10 ** rate_range[0], 10 ** rate_range[1]))
+        st.session_state.sol = sol
+        st.session_state.rupt_ids = rupt_ids
+        st.session_state.max_scenario = len(rupt_ids)
+
     st.sidebar.button("Get ruptures", on_click=call_get_ruptures)
 
-    if scenario_enabled and len(st.session_state.rupt_ids) > 0:
+    if len(st.session_state.rupt_ids) > 0:
     
         try:
             st.session_state.fmap = generate_folium_map(st.session_state.sol, st.session_state.rupt_ids, location, radius*1000, fmap=st.session_state.fmap, rupt_id=scenario_val-1)
@@ -354,7 +344,7 @@ def main():
             st.sidebar.write(f"Area: {rupture['Area (m^2)'].values[0]/1e6} km2")
             st.sidebar.write(f"Length: {rupture['Length (m)'].values[0]/1e3} m")
     else:
-        st.write("No rupture found")
+        st.sidebar.markdown(":red[**No rupture found**]", unsafe_allow_html=True)
 
     folium_static(st.session_state.fmap, width=1200, height=1200)
 if __name__ == "__main__":
